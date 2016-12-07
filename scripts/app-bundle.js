@@ -1,9 +1,10 @@
-define('app',['exports'], function (exports) {
+define('app',['exports', './web-api'], function (exports, _webApi) {
   'use strict';
 
   Object.defineProperty(exports, "__esModule", {
     value: true
   });
+  exports.App = undefined;
 
   function _classCallCheck(instance, Constructor) {
     if (!(instance instanceof Constructor)) {
@@ -12,8 +13,14 @@ define('app',['exports'], function (exports) {
   }
 
   var App = exports.App = function () {
-    function App() {
+    App.inject = function inject() {
+      return [_webApi.WebAPI];
+    };
+
+    function App(api) {
       _classCallCheck(this, App);
+
+      this.api = api;
     }
 
     App.prototype.configureRouter = function configureRouter(config, router) {
@@ -24,6 +31,154 @@ define('app',['exports'], function (exports) {
     };
 
     return App;
+  }();
+});
+define('contact-detail',['exports', 'aurelia-event-aggregator', './web-api', './messages', './utility'], function (exports, _aureliaEventAggregator, _webApi, _messages, _utility) {
+  'use strict';
+
+  Object.defineProperty(exports, "__esModule", {
+    value: true
+  });
+  exports.ContactDetail = undefined;
+
+  function _classCallCheck(instance, Constructor) {
+    if (!(instance instanceof Constructor)) {
+      throw new TypeError("Cannot call a class as a function");
+    }
+  }
+
+  var _createClass = function () {
+    function defineProperties(target, props) {
+      for (var i = 0; i < props.length; i++) {
+        var descriptor = props[i];
+        descriptor.enumerable = descriptor.enumerable || false;
+        descriptor.configurable = true;
+        if ("value" in descriptor) descriptor.writable = true;
+        Object.defineProperty(target, descriptor.key, descriptor);
+      }
+    }
+
+    return function (Constructor, protoProps, staticProps) {
+      if (protoProps) defineProperties(Constructor.prototype, protoProps);
+      if (staticProps) defineProperties(Constructor, staticProps);
+      return Constructor;
+    };
+  }();
+
+  var ContactDetail = exports.ContactDetail = function () {
+    ContactDetail.inject = function inject() {
+      return [_webApi.WebAPI, _aureliaEventAggregator.EventAggregator];
+    };
+
+    function ContactDetail(api, ea) {
+      _classCallCheck(this, ContactDetail);
+
+      this.api = api;
+      this.ea = ea;
+    }
+
+    ContactDetail.prototype.activate = function activate(params, routeConfig) {
+      var _this = this;
+
+      this.routeConfig = routeConfig;
+
+      return this.api.getContactDetails(params.id).then(function (contact) {
+        _this.contact = contact;
+        _this.routeConfig.navModel.setTitle(contact.firstName);
+        _this.originalContact = JSON.parse(JSON.stringify(contact));
+        _this.ea.publish(new _messages.ContactViewed(_this.contact));
+      });
+    };
+
+    ContactDetail.prototype.save = function save() {
+      var _this2 = this;
+
+      this.api.saveContact(this.contact).then(function (contact) {
+        _this2.contact = contact;
+        _this2.routeConfig.navModel.setTitle(contact.firstName);
+        _this2.originalContact = JSON.parse(JSON.stringify(contact));
+        _this2.ea.publish(new _messages.ContactUpdated(_this2.contact));
+      });
+    };
+
+    ContactDetail.prototype.canDeactivate = function canDeactivate() {
+      if (!(0, _utility.areEqual)(this.contact, this.originalContact)) {
+        var confirmed = confirm('Are you sure you want to leave without saving?');
+
+        if (!confirmed) {
+          this.ea.publish(new _messages.ContactViewed(this.contact));
+        }
+
+        return confirmed;
+      }
+
+      return true;
+    };
+
+    _createClass(ContactDetail, [{
+      key: 'canSave',
+      get: function get() {
+        return this.contact.firstName && this.contact.lastName && !this.api.isRequesting;
+      }
+    }]);
+
+    return ContactDetail;
+  }();
+});
+define('contact-list',['exports', 'aurelia-event-aggregator', './web-api', './messages'], function (exports, _aureliaEventAggregator, _webApi, _messages) {
+  'use strict';
+
+  Object.defineProperty(exports, "__esModule", {
+    value: true
+  });
+  exports.ContactList = undefined;
+
+  function _classCallCheck(instance, Constructor) {
+    if (!(instance instanceof Constructor)) {
+      throw new TypeError("Cannot call a class as a function");
+    }
+  }
+
+  var ContactList = exports.ContactList = function () {
+    ContactList.inject = function inject() {
+      return [_webApi.WebAPI, _aureliaEventAggregator.EventAggregator];
+    };
+
+    function ContactList(api, ea) {
+      var _this = this;
+
+      _classCallCheck(this, ContactList);
+
+      this.api = api;
+      this.contacts = [];
+
+      ea.subscribe(_messages.ContactViewed, function (msg) {
+        return _this.select(msg.contact);
+      });
+      ea.subscribe(_messages.ContactUpdated, function (msg) {
+        var id = msg.contact.id;
+
+        var found = _this.contacts.find(function (x) {
+          return x.id === id;
+        });
+        Object.assign(found, msg.contact);
+      });
+    }
+
+    ContactList.prototype.created = function created() {
+      var _this2 = this;
+
+      this.api.getContactList().then(function (contacts) {
+        return _this2.contacts = contacts;
+      });
+    };
+
+    ContactList.prototype.select = function select(contact) {
+      this.selectedId = contact.id;
+      return true;
+    };
+
+    return ContactList;
   }();
 });
 define('environment',["exports"], function (exports) {
@@ -76,6 +231,31 @@ define('main',['exports', './environment'], function (exports, _environment) {
     });
   }
 });
+define('messages',["exports"], function (exports) {
+  "use strict";
+
+  Object.defineProperty(exports, "__esModule", {
+    value: true
+  });
+
+  function _classCallCheck(instance, Constructor) {
+    if (!(instance instanceof Constructor)) {
+      throw new TypeError("Cannot call a class as a function");
+    }
+  }
+
+  var ContactUpdated = exports.ContactUpdated = function ContactUpdated(contact) {
+    _classCallCheck(this, ContactUpdated);
+
+    this.contact = contact;
+  };
+
+  var ContactViewed = exports.ContactViewed = function ContactViewed(contact) {
+    _classCallCheck(this, ContactViewed);
+
+    this.contact = contact;
+  };
+});
 define('no-selection',['exports'], function (exports) {
   'use strict';
 
@@ -121,7 +301,7 @@ define('web-api',['exports'], function (exports) {
     }
   }
 
-  var latency = 200;
+  var latency = 1000;
   var id = 0;
 
   function getId() {
@@ -230,169 +410,43 @@ define('web-api',['exports'], function (exports) {
     return WebAPI;
   }();
 });
-define('resources/index',["exports"], function (exports) {
-  "use strict";
+define('resources/index',['exports'], function (exports) {
+  'use strict';
 
   Object.defineProperty(exports, "__esModule", {
     value: true
   });
   exports.configure = configure;
-  function configure(config) {}
+  function configure(config) {
+    config.globalResources(['./elements/loading-indicator']);
+  }
 });
-define('contact-list',['exports', 'aurelia-event-aggregator', './web-api', './messages'], function (exports, _aureliaEventAggregator, _webApi, _messages) {
+define('resources/elements/loading-indicator',['exports', 'nprogress', 'aurelia-framework'], function (exports, _nprogress, _aureliaFramework) {
   'use strict';
 
   Object.defineProperty(exports, "__esModule", {
     value: true
   });
-  exports.ContactList = undefined;
+  exports.LoadingIndicator = undefined;
 
-  function _classCallCheck(instance, Constructor) {
-    if (!(instance instanceof Constructor)) {
-      throw new TypeError("Cannot call a class as a function");
-    }
-  }
+  var nprogress = _interopRequireWildcard(_nprogress);
 
-  var ContactList = exports.ContactList = function () {
-    ContactList.inject = function inject() {
-      return [_webApi.WebAPI, _aureliaEventAggregator.EventAggregator];
-    };
+  function _interopRequireWildcard(obj) {
+    if (obj && obj.__esModule) {
+      return obj;
+    } else {
+      var newObj = {};
 
-    function ContactList(api, ea) {
-      var _this = this;
-
-      _classCallCheck(this, ContactList);
-
-      this.api = api;
-      this.contacts = [];
-
-      ea.subscribe(_messages.ContactViewed, function (msg) {
-        return _this.select(msg.contact);
-      });
-      ea.subscribe(_messages.ContactUpdated, function (msg) {
-        var id = msg.contact.id;
-
-        var found = _this.contacts.find(function (x) {
-          return x.id === id;
-        });
-        Object.assign(found, msg.contact);
-      });
-    }
-
-    ContactList.prototype.created = function created() {
-      var _this2 = this;
-
-      this.api.getContactList().then(function (contacts) {
-        return _this2.contacts = contacts;
-      });
-    };
-
-    ContactList.prototype.select = function select(contact) {
-      this.selectedId = contact.id;
-      return true;
-    };
-
-    return ContactList;
-  }();
-});
-define('contact-detail',['exports', 'aurelia-event-aggregator', './web-api', './messages', './utility'], function (exports, _aureliaEventAggregator, _webApi, _messages, _utility) {
-  'use strict';
-
-  Object.defineProperty(exports, "__esModule", {
-    value: true
-  });
-  exports.ContactDetail = undefined;
-
-  function _classCallCheck(instance, Constructor) {
-    if (!(instance instanceof Constructor)) {
-      throw new TypeError("Cannot call a class as a function");
-    }
-  }
-
-  var _createClass = function () {
-    function defineProperties(target, props) {
-      for (var i = 0; i < props.length; i++) {
-        var descriptor = props[i];
-        descriptor.enumerable = descriptor.enumerable || false;
-        descriptor.configurable = true;
-        if ("value" in descriptor) descriptor.writable = true;
-        Object.defineProperty(target, descriptor.key, descriptor);
-      }
-    }
-
-    return function (Constructor, protoProps, staticProps) {
-      if (protoProps) defineProperties(Constructor.prototype, protoProps);
-      if (staticProps) defineProperties(Constructor, staticProps);
-      return Constructor;
-    };
-  }();
-
-  var ContactDetail = exports.ContactDetail = function () {
-    ContactDetail.inject = function inject() {
-      return [_webApi.WebAPI, _aureliaEventAggregator.EventAggregator];
-    };
-
-    function ContactDetail(api, ea) {
-      _classCallCheck(this, ContactDetail);
-
-      this.api = api;
-      this.ea = ea;
-    }
-
-    ContactDetail.prototype.activate = function activate(params, routeConfig) {
-      var _this = this;
-
-      this.routeConfig = routeConfig;
-
-      return this.api.getContactDetails(params.id).then(function (contact) {
-        _this.contact = contact;
-        _this.routeConfig.navModel.setTitle(contact.firstName);
-        _this.originalContact = JSON.parse(JSON.stringify(contact));
-        _this.ea.publish(new _messages.ContactViewed(_this.contact));
-      });
-    };
-
-    ContactDetail.prototype.save = function save() {
-      var _this2 = this;
-
-      this.api.saveContact(this.contact).then(function (contact) {
-        _this2.contact = contact;
-        _this2.routeConfig.navModel.setTitle(contact.firstName);
-        _this2.originalContact = JSON.parse(JSON.stringify(contact));
-        _this2.ea.publish(new _messages.ContactUpdated(_this2.contact));
-      });
-    };
-
-    ContactDetail.prototype.canDeactivate = function canDeactivate() {
-      if (!(0, _utility.areEqual)(this.contact, this.originalContact)) {
-        var confirmed = confirm('Are you sure you want to leave without saving?');
-
-        if (!confirmed) {
-          this.ea.publish(new _messages.ContactViewed(this.contact));
+      if (obj != null) {
+        for (var key in obj) {
+          if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key];
         }
-
-        return confirmed;
       }
 
-      return true;
-    };
-
-    _createClass(ContactDetail, [{
-      key: 'canSave',
-      get: function get() {
-        return this.contact.firstName && this.contact.lastName && !this.api.isRequesting;
-      }
-    }]);
-
-    return ContactDetail;
-  }();
-});
-define('messages',["exports"], function (exports) {
-  "use strict";
-
-  Object.defineProperty(exports, "__esModule", {
-    value: true
-  });
+      newObj.default = obj;
+      return newObj;
+    }
+  }
 
   function _classCallCheck(instance, Constructor) {
     if (!(instance instanceof Constructor)) {
@@ -400,21 +454,25 @@ define('messages',["exports"], function (exports) {
     }
   }
 
-  var ContactUpdated = exports.ContactUpdated = function ContactUpdated(contact) {
-    _classCallCheck(this, ContactUpdated);
+  var LoadingIndicator = exports.LoadingIndicator = (0, _aureliaFramework.decorators)((0, _aureliaFramework.noView)(['nprogress/nprogress.css']), (0, _aureliaFramework.bindable)({ name: 'loading', defaultValue: false })).on(function () {
+    function _class() {
+      _classCallCheck(this, _class);
+    }
 
-    this.contact = contact;
-  };
+    _class.prototype.loadingChanged = function loadingChanged(newValue) {
+      if (newValue) {
+        nprogress.start();
+      } else {
+        nprogress.done();
+      }
+    };
 
-  var ContactViewed = exports.ContactViewed = function ContactViewed(contact) {
-    _classCallCheck(this, ContactViewed);
-
-    this.contact = contact;
-  };
+    return _class;
+  }());
 });
-define('text!app.html', ['module'], function(module) { module.exports = "<template>\n  <require from=\"bootstrap/css/bootstrap.css\"></require>\n  <require from=\"./styles.css\"></require>\n  <require from=\"./contact-list\"></require>\n\n  <nav class=\"navbar navbar-default navbar-fixed-top\" role=\"navigation\">\n    <div class=\"navbar-header\">\n      <a class=\"navbar-brand\" href=\"#\">\n        <i class=\"fa fa-user\"></i>\n        <span>Contacts</span>\n      </a>\n    </div>\n  </nav>\n\n  <div class=\"container\">\n    <div class=\"row\">\n      <contact-list class=\"col-md-4\"></contact-list>\n      <router-view class=\"col-md-8\"></router-view>\n    </div>\n  </div>\n</template>\n"; });
+define('text!app.html', ['module'], function(module) { module.exports = "<template>\n  <require from=\"bootstrap/css/bootstrap.css\"></require>\n  <require from=\"./styles.css\"></require>\n  <require from=\"./contact-list\"></require>\n\n  <nav class=\"navbar navbar-default navbar-fixed-top\" role=\"navigation\">\n    <div class=\"navbar-header\">\n      <a class=\"navbar-brand\" href=\"#\">\n        <i class=\"fa fa-user\"></i>\n        <span>Contacts</span>\n      </a>\n    </div>\n  </nav>\n\n  <loading-indicator loading.bind=\"router.isNavigating || api.isRequesting\"></loading-indicator>\n\n  <div class=\"container\">\n    <div class=\"row\">\n      <contact-list class=\"col-md-4\"></contact-list>\n      <router-view class=\"col-md-8\"></router-view>\n    </div>\n  </div>\n</template>\n"; });
 define('text!styles.css', ['module'], function(module) { module.exports = "body { padding-top: 70px; }\n\nsection {\n  margin: 0 20px;\n}\n\na:focus {\n  outline: none;\n}\n\n.navbar-nav li.loader {\n    margin: 12px 24px 0 6px;\n}\n\n.no-selection {\n  margin: 20px;\n}\n\n.contact-list {\n  overflow-y: auto;\n  border: 1px solid #ddd;\n  padding: 10px;\n}\n\n.panel {\n  margin: 20px;\n}\n\n.button-bar {\n  right: 0;\n  left: 0;\n  bottom: 0;\n  border-top: 1px solid #ddd;\n  background: white;\n}\n\n.button-bar > button {\n  float: right;\n  margin: 20px;\n}\n\nli.list-group-item {\n  list-style: none;\n}\n\nli.list-group-item > a {\n  text-decoration: none;\n}\n\nli.list-group-item.active > a {\n  color: white;\n}\n"; });
-define('text!no-selection.html', ['module'], function(module) { module.exports = "<template>\n  <div class=\"no-selection text-center\">\n    <h2>${message}</h2>\n  </div>\n</template>\n"; });
-define('text!contact-list.html', ['module'], function(module) { module.exports = "<template>\n  <div class=\"contact-list\">\n    <li repeat.for=\"contact of contacts\" class=\"list-group-item ${contact.id === $parent.selectedId ? 'active' : ''}\">\n      <a route-href=\"route: contacts; params.bind: {id:contact.id}\" click.delegate=\"$parent.select(contact)\">\n        <h4 class=\"list-group-item-heading\">${contact.firstName} ${contact.lastName}</h4>\n        <p class=\"list-group-item-text\">${contact.email}</p>\n      </a>\n    </li>\n  </div>\n</template>\n"; });
 define('text!contact-detail.html', ['module'], function(module) { module.exports = "<template>\n  <div class=\"panel panel-primary\">\n    <div class=\"panel-heading\">\n      <h3 class=\"panel-title\">Profile</h3>\n    </div>\n    <div class=\"panel-body\">\n      <form role=\"form\" class=\"form-horizontal\">\n        <div class=\"form-group\">\n          <label class=\"col-sm-2 control-label\">First Name</label>\n          <div class=\"col-sm-10\">\n            <input type=\"text\" placeholder=\"first name\" class=\"form-control\" value.bind=\"contact.firstName\">\n          </div>\n        </div>\n\n        <div class=\"form-group\">\n          <label class=\"col-sm-2 control-label\">Last Name</label>\n          <div class=\"col-sm-10\">\n            <input type=\"text\" placeholder=\"last name\" class=\"form-control\" value.bind=\"contact.lastName\">\n          </div>\n        </div>\n\n        <div class=\"form-group\">\n          <label class=\"col-sm-2 control-label\">Email</label>\n          <div class=\"col-sm-10\">\n            <input type=\"text\" placeholder=\"email\" class=\"form-control\" value.bind=\"contact.email\">\n          </div>\n        </div>\n\n        <div class=\"form-group\">\n          <label class=\"col-sm-2 control-label\">Phone Number</label>\n          <div class=\"col-sm-10\">\n            <input type=\"text\" placeholder=\"phone number\" class=\"form-control\" value.bind=\"contact.phoneNumber\">\n          </div>\n        </div>\n      </form>\n    </div>\n  </div>\n\n  <div class=\"button-bar\">\n    <button class=\"btn btn-success\" click.delegate=\"save()\" disabled.bind=\"!canSave\">Save</button>\n  </div>\n</template>\n"; });
+define('text!contact-list.html', ['module'], function(module) { module.exports = "<template>\n  <div class=\"contact-list\">\n    <li repeat.for=\"contact of contacts\" class=\"list-group-item ${contact.id === $parent.selectedId ? 'active' : ''}\">\n      <a route-href=\"route: contacts; params.bind: {id:contact.id}\" click.delegate=\"$parent.select(contact)\">\n        <h4 class=\"list-group-item-heading\">${contact.firstName} ${contact.lastName}</h4>\n        <p class=\"list-group-item-text\">${contact.email}</p>\n      </a>\n    </li>\n  </div>\n</template>\n"; });
+define('text!no-selection.html', ['module'], function(module) { module.exports = "<template>\n  <div class=\"no-selection text-center\">\n    <h2>${message}</h2>\n  </div>\n</template>\n"; });
 //# sourceMappingURL=app-bundle.js.map

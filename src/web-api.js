@@ -1,4 +1,4 @@
-let latency = 200;
+let latency = 1000;
 let id = 0;
 
 function getId(){
@@ -45,7 +45,7 @@ let contacts = [
 
 export class WebAPI {
   isRequesting = false;
-  
+
   getContactList(){
     this.isRequesting = true;
     return new Promise(resolve => {
